@@ -578,8 +578,12 @@ void runLoopCallback(void *info){
 - (IBAction)onColorStandardSelectorClick:(id)sender{
 	switch(_colorStandardSelector.selectedSegment){
 		case 0:
-			decoder->replaceColorDecoder(new Decoder::ColorDecoderSECAM());
+		{
+			Decoder::ColorDecoderSECAM *colorDecoder=new Decoder::ColorDecoderSECAM();
+			colorDecoder->colorArtifactFilterEnabled=_colorArtifactFilterCheckbox.state==NSControlStateValueOn;
+			decoder->replaceColorDecoder(colorDecoder);
 			break;
+		}
 		case 1:
 			decoder->replaceColorDecoder(new Decoder::ColorDecoderPAL());
 			break;
