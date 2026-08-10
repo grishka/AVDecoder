@@ -138,6 +138,17 @@ void runLoopCallback(void *info){
 	audioDeviceDiscoverySession=[AVCaptureDeviceDiscoverySession discoverySessionWithDeviceTypes:@[AVCaptureDeviceTypeMicrophone] mediaType:AVMediaTypeAudio position:AVCaptureDevicePositionUnspecified];
 	[audioDeviceDiscoverySession addObserver:self forKeyPath:@"devices" options:NSKeyValueObservingOptionNew | NSKeyValueObservingOptionInitial context:NULL];
 	sampleCallbackQueue=dispatch_queue_create("Audio recording callback queue", NULL);
+	
+	NSArray<NSString*>* args=NSProcessInfo.processInfo.arguments;
+	if(args.count>=2){
+		NSString *arg=args[1];
+		if(arg.length>5 && [[arg substringFromIndex:arg.length-5] isEqualToString:@".flac"]){
+			self->source=new FileSignalSource(std::string([arg UTF8String]));
+			[self startSource];
+		}else if([arg isEqualToString:@"adc"]){
+			[self onStartAdcClick:nil];
+		}
+	}
 }
 
 
