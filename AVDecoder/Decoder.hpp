@@ -79,8 +79,8 @@ public:
 	class ColorDecoder{
 	public:
 		virtual ~ColorDecoder(){};
-		virtual float *separateSubcarrier(float *rawSignal, float *nextBuffer)=0;
-		virtual void demodulateSubcarrier(float *samples, SignalBuffers *buf)=0;
+		virtual void separateSubcarrier(SignalBuffers *buf, float *nextBuffer)=0;
+		virtual void demodulateSubcarrier(SignalBuffers *buf)=0;
 		virtual void decodeColor(VideoField *field)=0;
 	};
 	
@@ -88,8 +88,8 @@ public:
 	public:
 		ColorDecoderSECAM();
 		virtual ~ColorDecoderSECAM();
-		virtual float *separateSubcarrier(float *rawSignal, float *nextBuffer);
-		virtual void demodulateSubcarrier(float *samples, SignalBuffers *buf);
+		virtual void separateSubcarrier(SignalBuffers *buf, float *nextBuffer);
+		virtual void demodulateSubcarrier(SignalBuffers *buf);
 		virtual void decodeColor(VideoField *field);
 		bool colorArtifactFilterEnabled=true;
 	private:
@@ -113,8 +113,8 @@ public:
 	public:
 		ColorDecoderPAL();
 		virtual ~ColorDecoderPAL();
-		virtual float *separateSubcarrier(float *rawSignal, float *nextBuffer);
-		virtual void demodulateSubcarrier(float *samples, SignalBuffers *buf);
+		virtual void separateSubcarrier(SignalBuffers *buf, float *nextBuffer);
+		virtual void demodulateSubcarrier(SignalBuffers *buf);
 		virtual void decodeColor(VideoField *field);
 	private:
 		FIRFilter chromaSeparationFilter;

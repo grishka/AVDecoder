@@ -216,13 +216,12 @@ void Decoder::runDecoderThread(){
 			nextSamples[i]=sampleInt/255.0;
 		}
 		
-		float *subcarrier=colorDecoder->separateSubcarrier(samples, nextSamples);
-		memcpy(nextBuf->luminance, samples, BUFFER_SIZE*sizeof(float));
+		colorDecoder->separateSubcarrier(nextBuf, nextSamples);
 		
 		syncLowpass.process(nextBuf->luminance, nextBuf->filteredLuminance, BUFFER_SIZE);
 		luminanceLowpass.process(nextBuf->luminance, nextBuf->luminance, BUFFER_SIZE);
 
-		colorDecoder->demodulateSubcarrier(subcarrier, nextBuf);
+		colorDecoder->demodulateSubcarrier(nextBuf);
 
 		float minLevels[128];
 		for(int i=0;i<128;i++)
@@ -951,26 +950,26 @@ Decoder::ColorDecoderSECAM::~ColorDecoderSECAM(){
 	free(prevFieldChrominance[1]);
 }
 	
-float *Decoder::ColorDecoderSECAM::separateSubcarrier(float *rawSignal, float *nextBuffer){
+void Decoder::ColorDecoderSECAM::separateSubcarrier(SignalBuffers *buf, float *nextBuffer){
 	const int filterSize=chromaSeparationFilter.getSize();
 	const int filterDelay=chromaSeparationFilter.getDelay();
 	memcpy(samples, samples+BUFFER_SIZE, filterSize*sizeof(float));
 	memcpy(samples+filterDelay+BUFFER_SIZE, nextBuffer, filterDelay*sizeof(float));
-	memcpy(samples+filterDelay, rawSignal, BUFFER_SIZE*sizeof(float));
+	memcpy(samples+filterDelay, buf->raw, BUFFER_SIZE*sizeof(float));
 	chromaSeparationFilter.process(samples, subcarrier, BUFFER_SIZE+filterDelay);
 	for(int i=0;i<BUFFER_SIZE;i++){
-		rawSignal[i]-=subcarrier[i];
+		buf->luminance[i]=buf->raw[i]-subcarrier[i];
 	}
-	return subcarrier;
+	memcpy(buf->chrominance[0], subcarrier, sizeof(float)*BUFFER_SIZE);
 }
 
-void Decoder::ColorDecoderSECAM::demodulateSubcarrier(float *samples, SignalBuffers *buf){
-	hilbertTransform.process(samples, buf->chrominance[1]);
+void Decoder::ColorDecoderSECAM::demodulateSubcarrier(SignalBuffers *buf){
+	hilbertTransform.process(buf->chrominance[0], buf->chrominance[1]);
 	float gain=20000000.0f/(2*(float)M_PI);
 	for(int i=0;i<BUFFER_SIZE-1;i++){
-		float a=samples[i];
+		float a=buf->chrominance[0][i];
 		float b=-buf->chrominance[1][i]; // conj
-		float c=samples[i+1];
+		float c=buf->chrominance[0][i+1];
 		float d=buf->chrominance[1][i+1];
 
 		// complex multiply
@@ -1127,37 +1126,36 @@ Decoder::ColorDecoderPAL::~ColorDecoderPAL(){
 	free(prevRawSignal);
 }
 
-float *Decoder::ColorDecoderPAL::separateSubcarrier(float *rawSignal, float *nextBuffer){
+void Decoder::ColorDecoderPAL::separateSubcarrier(SignalBuffers *buf, float *nextBuffer){
 	const int filterSize=chromaSeparationFilter.getSize();
 	const int filterDelay=chromaSeparationFilter.getDelay();
 	memcpy(samples, samples+BUFFER_SIZE, filterSize*sizeof(float));
 	memcpy(samples+filterDelay+BUFFER_SIZE, nextBuffer, filterDelay*sizeof(float));
 	for(int i=0;i<DEFAULT_LINE_DURATION*2;i++){
-		samples[i+filterDelay]=(rawSignal[i]*2-rawSignal[i+DEFAULT_LINE_DURATION*2]-prevRawSignal[i])/4.0f;
+		samples[i+filterDelay]=(buf->raw[i]*2-buf->raw[i+DEFAULT_LINE_DURATION*2]-prevRawSignal[i])/4.0f;
 	}
-	memcpy(prevRawSignal, rawSignal+BUFFER_SIZE-DEFAULT_LINE_DURATION*2, DEFAULT_LINE_DURATION*2*sizeof(float));
+	memcpy(prevRawSignal, buf->raw+BUFFER_SIZE-DEFAULT_LINE_DURATION*2, DEFAULT_LINE_DURATION*2*sizeof(float));
 	for(int i=DEFAULT_LINE_DURATION*2;i<BUFFER_SIZE-DEFAULT_LINE_DURATION*2;i++){
-		samples[i+filterDelay]=(rawSignal[i]*2-rawSignal[i+DEFAULT_LINE_DURATION*2]-rawSignal[i-DEFAULT_LINE_DURATION*2])/4.0f;
+		samples[i+filterDelay]=(buf->raw[i]*2-buf->raw[i+DEFAULT_LINE_DURATION*2]-buf->raw[i-DEFAULT_LINE_DURATION*2])/4.0f;
 	}
 	for(int i=BUFFER_SIZE-DEFAULT_LINE_DURATION*2;i<BUFFER_SIZE;i++){
-		samples[i+filterDelay]=(rawSignal[i]*2-nextBuffer[i+DEFAULT_LINE_DURATION*2-BUFFER_SIZE]-rawSignal[i-DEFAULT_LINE_DURATION*2])/4.0f;
+		samples[i+filterDelay]=(buf->raw[i]*2-nextBuffer[i+DEFAULT_LINE_DURATION*2-BUFFER_SIZE]-buf->raw[i-DEFAULT_LINE_DURATION*2])/4.0f;
 	}
 	chromaSeparationFilter.process(samples, subcarrier, BUFFER_SIZE+filterDelay);
 	for(int i=0;i<BUFFER_SIZE;i++){
-		rawSignal[i]-=samples[i+filterDelay]-subcarrier[i];
-		subcarrier[i]=samples[i+filterDelay];
+		buf->luminance[i]=buf->raw[i]-(samples[i+filterDelay]-subcarrier[i]);
+		buf->chrominance[0][i]=samples[i+filterDelay];
 	}
-
-	return subcarrier;
 }
 
-void Decoder::ColorDecoderPAL::demodulateSubcarrier(float *samples, SignalBuffers *buf){
+void Decoder::ColorDecoderPAL::demodulateSubcarrier(SignalBuffers *buf){
 	double samplesPerPeriod=20000000.0/4433618.75;
 	for(int i=0;i<BUFFER_SIZE;i++){
 		float angle=(1.0/samplesPerPeriod)*sampleCount*2048;
 		int lutIndex=(int)angle%2048;
-		buf->chrominance[0][i]=samples[i]*sinLUT[lutIndex];
-		buf->chrominance[1][i]=samples[i]*cosLUT[lutIndex];
+		float subcarrierSample=buf->chrominance[0][i];
+		buf->chrominance[0][i]=subcarrierSample*sinLUT[lutIndex];
+		buf->chrominance[1][i]=subcarrierSample*cosLUT[lutIndex];
 
 		sampleCount++;
 	}
