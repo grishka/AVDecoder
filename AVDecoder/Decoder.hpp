@@ -78,10 +78,14 @@ public:
 	
 	class ColorDecoder{
 	public:
+		ColorDecoder();
 		virtual ~ColorDecoder(){};
 		virtual void separateSubcarrier(SignalBuffers *buf, float *nextBuffer)=0;
 		virtual void demodulateSubcarrier(SignalBuffers *buf)=0;
 		virtual void decodeColor(VideoField *field)=0;
+	protected:
+		float sinLUT[2048];
+		float cosLUT[2048];
 	};
 	
 	class ColorDecoderSECAM: public ColorDecoder{
@@ -95,17 +99,18 @@ public:
 	private:
 		FIRFilter chromaSeparationFilter;
 		BiquadFilter chromaDeemphasisFilter;
-		BiquadFilter chromaLowpassFilter;
-		float *samples;
-		float *subcarrier;
+		float *rawISamples;
+		float *rawQSamples;
 		float *prevFieldChrominance[2];
-		HilbertTransform hilbertTransform;
 		unsigned int frameCount=0;
+		unsigned int angleIndex=0;
+		float prevI=0, prevQ=0;
 		
-		static constexpr float redCenterFreq=4406000;
+		static constexpr float redCenterFreq=4406250;
 		static constexpr float blueCenterFreq=4250000;
 		static constexpr float redMaxDeviation=280000;
 		static constexpr float blueMaxDeviation=230000;
+		static constexpr float intermediateFreq=(redCenterFreq+blueCenterFreq)/2.0f;
 		int colorLineOffset=0;
 	};
 	
@@ -126,8 +131,6 @@ public:
 		float *subcarrier;
 		float *prevRawSignal;
 		int sampleCount=0;
-		float sinLUT[2048];
-		float cosLUT[2048];
 	};
 
 private:
