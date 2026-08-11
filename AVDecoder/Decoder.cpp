@@ -729,8 +729,6 @@ void Decoder::interpolateLine(VideoLine const& src, VideoLine const& dst, float 
 }
 
 void Decoder::processLine(VideoLine line, int lineIndex, float syncLevel, float blackLevel, float whiteLevel){
-	int numSamples=line.numSamples;
-
 	uint32_t* bitmapPixels=(uint32_t*)bitmapData;
 	float visibleBrightnessRange=whiteLevel-blackLevel;
 	
@@ -994,6 +992,9 @@ void Decoder::ColorDecoderSECAM::demodulateSubcarrier(SignalBuffers *buf){
 void Decoder::ColorDecoderSECAM::decodeColor(VideoField *field){
 	float subcarrierAmplitudeThreshold=(field->blackLevel-field->syncLevel)/0.43f*0.03f;
 	int wrongLineCount=0;
+	int syncLineCount=0;
+	// Look at the "green lines" aka "green bottles" (Soviet literature calls them just "color sync signals")
+	// in the VBI to determine which lines carry R-Y and which B-Y
 	for(int i=(field->isBottom ? 7 : 6);i<(field->isBottom ? 15 : 16);i++){
 		VideoLine &line=field->lines[i];
 		int lineIndex=i+(field->isBottom ? 312 : 0);
@@ -1014,15 +1015,36 @@ void Decoder::ColorDecoderSECAM::decodeColor(VideoField *field){
 		float maxFreq=maxSum/200.0;
 		float freqDiff=centerFreq-maxFreq;
 		if(centerFreq>3500000 && centerFreq<4500000 && fabsf(freqDiff)>270000.0f){
+			syncLineCount++;
 			bool isActuallyRedLine=maxFreq>centerFreq;
 			if(isActuallyRedLine!=isRedLine){
 				wrongLineCount++;
 			}
 		}
 	}
-	if(wrongLineCount>=2){
+	
+	if(syncLineCount<2){ // There were no green lines or they were all too garbled
+		// So let's instead analyze some of the top active lines, since they *should* have some undeviated carrier in the front porch
+		int start=field->isBottom ? 27 : 26;
+		int end=field->isBottom ? 35 : 34;
+		for(int i=start;i<end;i++){
+			float avg=0;
+			for(int j=150;j<190;j++){
+				avg+=field->lines[i].chrominance[0][j];
+			}
+			avg/=40.0f;
+			int lineIndex=i+(field->isBottom ? 312 : 0);
+			bool isRedLine=(lineIndex+colorLineOffset)%2==0;
+			bool isActuallyRedLine=avg>intermediateFreq;
+			if(isRedLine!=isActuallyRedLine)
+				wrongLineCount++;
+		}
+	}
+	
+	if(wrongLineCount>=2){ // Our current state is wrong, flip it
 		colorLineOffset=colorLineOffset==1 ? 0 : 1;
 	}
+	
 	for(int i=0;i<(field->isBottom ? 313 : 312);i++){
 		int lineIndex=i+(field->isBottom ? 312 : 0);
 		
