@@ -88,7 +88,11 @@
 - (instancetype)init{
 	self=[super init];
 	if(self){
-		_scopeLineNumber=@(16);
+		NSUserDefaults *defaults=NSUserDefaults.standardUserDefaults;
+		if([defaults objectForKey:@"ScopeLineNumber"])
+			_scopeLineNumber=@([defaults integerForKey:@"ScopeLineNumber"]);
+		else
+			_scopeLineNumber=@(16);
 	}
 	return self;
 }
@@ -130,7 +134,19 @@ void runLoopCallback(void *info){
 	CFRunLoopAddSource(CFRunLoopGetMain(), runLoopSource, kCFRunLoopCommonModes);
 	
 	decoder=new Decoder(data, (unsigned int)bitmap.pixelsWide, (unsigned int)bitmap.pixelsHigh, (unsigned int)bitmap.bytesPerRow, runLoopSource);
-	
+	switch([NSUserDefaults.standardUserDefaults integerForKey:@"ColorSystem"]){
+		case 1:
+			decoder->colorDecoder=new Decoder::ColorDecoderPAL();
+			_colorStandardSelector.selectedSegment=1;
+			break;
+		default:
+			decoder->colorDecoder=new Decoder::ColorDecoderSECAM();
+			break;
+	}
+	decoder->scopeLineIndex=_scopeLineNumber.intValue;
+	if([NSUserDefaults.standardUserDefaults objectForKey:@"SignalOffset"])
+		_signalOffsetSlider.intValue=[NSUserDefaults.standardUserDefaults integerForKey:@"SignalOffset"];
+
 	_bitmapView.bitmap=bitmap;
 	[_scopeView setData:&decoder->scopeData1 secondary:&decoder->scopeData2 lines:&decoder->scopeLines];
 	_bitmapView.needsDisplay=true;
@@ -566,6 +582,7 @@ void runLoopCallback(void *info){
 
 - (IBAction)updateScopeLine:(id)sender{
 	decoder->scopeLineIndex=_scopeLineNumber.intValue;
+	[NSUserDefaults.standardUserDefaults setInteger:_scopeLineNumber.intValue forKey:@"ScopeLineNumber"];
 }
 
 - (IBAction)updateWhiteLevel:(id)sender{
@@ -577,6 +594,7 @@ void runLoopCallback(void *info){
 	if(adcSource){
 		adcSource->offset=_signalOffsetSlider.intValue;
 	}
+	[NSUserDefaults.standardUserDefaults setInteger:_signalOffsetSlider.intValue forKey:@"SignalOffset"];
 }
 
 - (IBAction)onColorArtifactFilterClick:(id)sender{
@@ -599,6 +617,7 @@ void runLoopCallback(void *info){
 			decoder->replaceColorDecoder(new Decoder::ColorDecoderPAL());
 			break;
 	}
+	[NSUserDefaults.standardUserDefaults setInteger:_colorStandardSelector.selectedSegment forKey:@"ColorSystem"];
 }
 
 @end

@@ -112,8 +112,6 @@ public:
 
 Decoder::Decoder(void* bitmapData, unsigned int bitmapWidth, unsigned int bitmapHeight, unsigned int bitmapStride, CFRunLoopSourceRef runLoopSource) :bitmapData(bitmapData), bitmapWidth(bitmapWidth), bitmapHeight(bitmapHeight), bitmapStride(bitmapStride/4), decoderThread(std::bind(&Decoder::runDecoderThread, this)), runLoopSource(runLoopSource){
 	
-	colorDecoder=new ColorDecoderSECAM();
-	
 	currentOutputBuffer=outputBufferPool.Get();
 	mainThreadRunLoop=CFRunLoopGetMain();
 	interpolatedField=new VideoField();
