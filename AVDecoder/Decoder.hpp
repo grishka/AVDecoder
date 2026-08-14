@@ -122,15 +122,28 @@ public:
 		virtual void demodulateSubcarrier(SignalBuffers *buf);
 		virtual void decodeColor(VideoField *field);
 	private:
-		FIRFilter chromaSeparationFilter;
+		FIRFilter chromaNotchFilter;
+		BiquadFilter verticalDiffLowpass;
+		BiquadFilter ycDiffLowpass;
+		
 		BiquadFilter phaseLowpassFilter;
 		BiquadFilter phaseLowpassFilter2;
 		BiquadFilter chromaLowpassFilter;
 		BiquadFilter chromaLowpassFilter2;
+		
+		float *yNotchRaw;
+		float *yNotch;
+		float *yComb;
+		float *cComb;
+		float *verticalDiff;
+		float *ycDiff;
+		
 		float *samples;
 		float *subcarrier;
 		float *prevRawSignal;
 		int sampleCount=0;
+		
+		static constexpr float fsc=4433618.75f;
 	};
 
 private:
