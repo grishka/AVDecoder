@@ -125,11 +125,7 @@ public:
 		FIRFilter chromaNotchFilter;
 		BiquadFilter verticalDiffLowpass;
 		BiquadFilter ycDiffLowpass;
-		
-		BiquadFilter phaseLowpassFilter;
-		BiquadFilter phaseLowpassFilter2;
-		BiquadFilter chromaLowpassFilter;
-		BiquadFilter chromaLowpassFilter2;
+		FIRFilter chromaLowpassFilter;
 		
 		float *yNotchRaw;
 		float *yNotch;
@@ -138,9 +134,9 @@ public:
 		float *verticalDiff;
 		float *ycDiff;
 		
-		float *samples;
-		float *subcarrier;
-		float *prevRawSignal;
+		float *rawI;
+		float *rawQ;
+		float *prevSubcarrier;
 		int sampleCount=0;
 		
 		static constexpr float fsc=4433618.75f;

@@ -1168,15 +1168,39 @@ Decoder::ColorDecoderPAL::ColorDecoderPAL():chromaNotchFilter({
 }),
 verticalDiffLowpass(-1.34891824, 0.51392633, 0.04125202, 0.08250405, 0.04125202),
 ycDiffLowpass(-1.34891824, 0.51392633, 0.04125202, 0.08250405, 0.04125202),
+/*
 
-phaseLowpassFilter(-1.58008635, 0.65408288, 0.05594167, 0.00824198, 0.00981288),
-phaseLowpassFilter2(-1.58008635, 0.65408288, 0.05594167, 0.00824198, 0.00981288),
-chromaLowpassFilter(-1.3698978138079605, 0.5254518355382106, 0.038888505432562503, 0.07777701086512501, 0.038888505432562503),
-chromaLowpassFilter2(-1.3698978138079605, 0.5254518355382106, 0.038888505432562503, 0.07777701086512501, 0.038888505432562503){
+FIR filter designed with
+http://t-filter.appspot.com
+
+sampling frequency: 20000000 Hz
+
+* 0 Hz - 1300000 Hz
+  gain = 1
+  desired ripple = 0.1 dB
+  actual ripple = 0.06330149551265106 dB
+
+* 2000000 Hz - 10000000 Hz
+  gain = 0
+  desired attenuation = -60 dB
+  actual attenuation = -61.324869774648064 dB
+
+*/
+chromaLowpassFilter({
+	0.0007531764721153182, 0.0007519874408971961, 0.0008729569988541416, 0.0007663799237776646, 0.00036879314744475765, -0.0003049347095003807, -0.0011395378732079375, -0.0019271769896894693, -0.0024080972682461455, -0.00234250098284755,
+	-0.0015943264953982939, -0.00020366148820846527, 0.0015789910528071964, 0.0033175633133526667, 0.004480905777870153, 0.004583816854226088, 0.0033463363899978674, 0.000825704498443918, -0.0025257417852139587, -0.0059096969960359975,
+	-0.008344496945319678, -0.008915713811573618, -0.007057813193061558, -0.002789953297410818, 0.003170813418377668, 0.009473103019323201, 0.014385341068687055, 0.01620427188452137, 0.013732813449343097, 0.006710296549959943,
+	-0.003926015644950164, -0.016040482243346765, -0.02659669821484103, -0.03221921797003905, -0.029917076727535838, -0.017812841202317516, 0.0042947916063085885, 0.034679307991646695, 0.06982680636866369, 0.10497164259121904,
+	0.13492869210263547, 0.1550564948941928, 0.16214608317804943, 0.1550564948941928, 0.13492869210263547, 0.10497164259121904, 0.06982680636866369, 0.034679307991646695, 0.0042947916063085885, -0.017812841202317516,
+	-0.029917076727535838, -0.03221921797003905, -0.02659669821484103, -0.016040482243346765, -0.003926015644950164, 0.006710296549959943, 0.013732813449343097, 0.01620427188452137, 0.014385341068687055, 0.009473103019323201,
+	0.003170813418377668, -0.002789953297410818, -0.007057813193061558, -0.008915713811573618, -0.008344496945319678, -0.0059096969960359975, -0.0025257417852139587, 0.000825704498443918, 0.0033463363899978674, 0.004583816854226088,
+	0.004480905777870153, 0.0033175633133526667, 0.0015789910528071964, -0.00020366148820846527, -0.0015943264953982939, -0.00234250098284755, -0.0024080972682461455, -0.0019271769896894693, -0.0011395378732079375, -0.0003049347095003807,
+	0.00036879314744475765, 0.0007663799237776646, 0.0008729569988541416, 0.0007519874408971961, 0.0007531764721153182
+}){
 	const int filterSize=chromaNotchFilter.getSize();
-	samples=(float*)calloc(BUFFER_SIZE+filterSize*2, sizeof(float));
-	subcarrier=(float*)calloc(BUFFER_SIZE+filterSize, sizeof(float));
-	prevRawSignal=(float*)calloc(DEFAULT_LINE_DURATION*2, sizeof(float));
+	rawI=(float*)calloc(BUFFER_SIZE+filterSize*2, sizeof(float));
+	rawQ=(float*)calloc(BUFFER_SIZE+filterSize, sizeof(float));
+	prevSubcarrier=(float*)calloc(DEFAULT_LINE_DURATION*2, sizeof(float));
 	
 	yNotch=(float*)calloc(BUFFER_SIZE+filterSize*2+DEFAULT_LINE_DURATION*4, sizeof(float));
 	yNotchRaw=(float*)calloc(BUFFER_SIZE+filterSize*2+DEFAULT_LINE_DURATION*4, sizeof(float));
@@ -1187,9 +1211,9 @@ chromaLowpassFilter2(-1.3698978138079605, 0.5254518355382106, 0.0388885054325625
 }
 
 Decoder::ColorDecoderPAL::~ColorDecoderPAL(){
-	free(samples);
-	free(subcarrier);
-	free(prevRawSignal);
+	free(rawI);
+	free(rawQ);
+	free(prevSubcarrier);
 	
 	free(yNotch);
 	free(yNotchRaw);
@@ -1224,8 +1248,8 @@ void Decoder::ColorDecoderPAL::separateSubcarrier(SignalBuffers *buf, float *nex
 	
 	const float vertLow=0.015f;
 	const float vertHigh=0.05f;
-	const float ycLow=0.01f;
-	const float ycHigh=0.02f;
+	const float ycLow=0.005f;
+	const float ycHigh=0.01f;
 	for(int i=0;i<BUFFER_SIZE;i++){
 		float k=std::clamp((verticalDiff[std::min(i+1, BUFFER_SIZE-1)]-vertLow)/(vertHigh-vertLow), 0.0f, 1.0f);
 		float filtered=(1.0f-k)*yComb[i]+k*yNotch[i+DEFAULT_LINE_DURATION*2];
@@ -1238,87 +1262,83 @@ void Decoder::ColorDecoderPAL::separateSubcarrier(SignalBuffers *buf, float *nex
 }
 
 void Decoder::ColorDecoderPAL::demodulateSubcarrier(SignalBuffers *buf){
-	double samplesPerPeriod=20000000.0/4433618.75;
+	double samplesPerPeriod=20000000.0/fsc;
+	const int lowpassDelay=chromaLowpassFilter.getDelay();
+	memcpy(rawI, rawI+BUFFER_SIZE, lowpassDelay*sizeof(float));
+	memcpy(rawQ, rawQ+BUFFER_SIZE, lowpassDelay*sizeof(float));
 	for(int i=0;i<BUFFER_SIZE;i++){
 		float angle=(1.0/samplesPerPeriod)*sampleCount*2048;
 		int lutIndex=(int)angle%2048;
 		float subcarrierSample=buf->chrominance[0][i];
-		buf->chrominance[0][i]=subcarrierSample*sinLUT[lutIndex];
-		buf->chrominance[1][i]=subcarrierSample*cosLUT[lutIndex];
+		rawI[i+lowpassDelay]=subcarrierSample*sinLUT[lutIndex];
+		rawQ[i+lowpassDelay]=subcarrierSample*cosLUT[lutIndex];
 
 		sampleCount++;
 	}
 	sampleCount%=2500*DEFAULT_LINE_DURATION;
-	phaseLowpassFilter.process(buf->chrominance[0], buf->chrominance[0], BUFFER_SIZE);
-	phaseLowpassFilter2.process(buf->chrominance[1], buf->chrominance[1], BUFFER_SIZE);
 	
-	for(int i=0;i<BUFFER_SIZE;i++){
-		float inphase=buf->chrominance[0][i];
-		float quadrature=buf->chrominance[1][i];
-		float phase=atan2f(quadrature, inphase);
-		float amplitude=hypotf(inphase, quadrature);
-		buf->chrominance[0][i]=phase;
-		buf->chrominance[1][i]=amplitude;
+	for(int i=0;i<lowpassDelay;i++){
+		rawI[i+BUFFER_SIZE+lowpassDelay]=rawI[BUFFER_SIZE+lowpassDelay-i];
+		rawQ[i+BUFFER_SIZE+lowpassDelay]=rawQ[BUFFER_SIZE+lowpassDelay-i];
 	}
+	
+	chromaLowpassFilter.process(rawI, buf->chrominance[0], BUFFER_SIZE);
+	chromaLowpassFilter.process(rawQ, buf->chrominance[1], BUFFER_SIZE);
 }
 
 void Decoder::ColorDecoderPAL::decodeColor(VideoField *field){
-	float prevLineBurstPhase=0;
-	//bool prevLineWasOdd=false;
+	float prevLineBurstAngle=0;
 	for(int i=0;i<(field->isBottom ? 313 : 312);i++){
 		VideoLine &line=field->lines[i];
-		float burstPhase=0, burstAmplitude=0;
-		float minPhase=M_PI, maxPhase=-M_PI;
+		float burstI=0, burstQ=0;
 		for(int j=115;j<156;j++){
-			minPhase=std::min(line.chrominance[0][j], minPhase);
-			maxPhase=std::max(line.chrominance[0][j], maxPhase);
+			burstI+=line.chrominance[0][j];
+			burstQ+=line.chrominance[1][j];
 		}
-		float phaseOffset=0;
-		if(maxPhase-minPhase>2){
-			phaseOffset=M_PI;
-		}
-		for(int j=115;j<156;j++){
-			float phase=line.chrominance[0][j]+phaseOffset;
-			if(phase>M_PI)
-				phase-=M_PI*2;
-			burstPhase+=phase;
-			burstAmplitude+=line.chrominance[1][j];
-		}
-		burstPhase/=41;
-		burstAmplitude/=41;
-		burstPhase-=phaseOffset;
+		burstI/=41.0f;
+		burstQ/=41.0f;
+		float burstAngle=atan2f(burstQ, burstI);
+		float burstAmplitude=hypotf(burstI, burstQ);
 		if(burstAmplitude<0.005f){
 			memset(line.chrominance[0], 0, DEFAULT_LINE_DURATION*sizeof(float));
 			memset(line.chrominance[1], 0, DEFAULT_LINE_DURATION*sizeof(float));
 			continue;
 		}
-		bool isOddLine=(burstPhase>prevLineBurstPhase && burstPhase-prevLineBurstPhase<M_PI*0.75f) || (prevLineBurstPhase>M_PI*0.25f && burstPhase<-M_PI*0.75f) || (prevLineBurstPhase>M_PI*0.25f && burstPhase<-M_PI*0.25f);
-		//if(prevLineWasOdd==isOddLine)
-		//	printf("%d %d %f -> %f; ", i, isOddLine, prevLineBurstPhase, burstPhase);
-		//prevLineWasOdd=isOddLine;
-		float amplitudeScale=1.0f/(burstAmplitude*3.5f);
-		float vScale=isOddLine ? -1 : 1;
-		float uOffset=(isOddLine ? 1.25f : 0.75f)*M_PI;
-		//printf("line %d %d %f; ", i, isOddLine, burstPhase);
+		
+		float overallChrominanceScale=1.0f/(burstAmplitude*3.5f);
+		float targetAngle=M_PI*0.75f; // 135 degrees
+		float angleDiff=burstAngle-prevLineBurstAngle;
+		if(angleDiff>M_PI)
+			angleDiff-=2*M_PI;
+		else if(angleDiff<=-M_PI)
+			angleDiff+=2*M_PI;
+		
+		float vScale=1;
+		if(angleDiff<0){
+			targetAngle=-targetAngle;
+			vScale=-1;
+		}
+		
+		float c=(double)cos(targetAngle-burstAngle);
+		float s=(double)sin(targetAngle-burstAngle);
 		for(int j=0;j<DEFAULT_LINE_DURATION;j++){
-			float phase=line.chrominance[0][j];
-			float newPhase=phase-burstPhase+uOffset;
-			float amplitude=line.chrominance[1][j]*amplitudeScale;
-			int lutIndex=(int)((newPhase+M_PI*4)/(M_PI*2)*2048)%2048;
-			// U / D'b
-			line.chrominance[0][j]=std::clamp(cosLUT[lutIndex]*amplitude/0.493f, -1.0f, 1.0f);
-			// V / D'r
-			line.chrominance[1][j]=std::clamp(sinLUT[lutIndex]*amplitude*vScale/0.877f, -1.0f, 1.0f);
+			float re=line.chrominance[0][j];
+			float im=line.chrominance[1][j];
+			line.chrominance[0][j]=std::clamp(-(re*s+im*c)*vScale*overallChrominanceScale/0.493f, -1.0f, 1.0f);
+			line.chrominance[1][j]=std::clamp(-(re*c-im*s)*overallChrominanceScale/0.877f, -1.0f, 1.0f);
 		}
-		if(i>0){
-			VideoLine &prevLine=field->lines[i-1];
-			for(int j=0;j<DEFAULT_LINE_DURATION;j++){
-				line.chrominance[0][j]=(line.chrominance[0][j]+prevLine.chrominance[0][j])/2.0f;
-				line.chrominance[1][j]=(line.chrominance[1][j]+prevLine.chrominance[1][j])/2.0f;
-			}
-		}
-		prevLineBurstPhase=burstPhase;
+		
+		prevLineBurstAngle=burstAngle;
 	}
-	chromaLowpassFilter.process(field->chrominance[0], field->chrominance[0], DEFAULT_LINE_DURATION*313);
-	chromaLowpassFilter2.process(field->chrominance[1], field->chrominance[1], DEFAULT_LINE_DURATION*313);
+	
+	// Average the chrominance of each line with the previous line to reduce noise
+	// and probably correct phase errors, but I'm not sure if that works like this
+	for(int i=(field->isBottom ? 313 : 312)-1;i>0;i--){
+		VideoLine &line=field->lines[i];
+		VideoLine &prevLine=field->lines[i-1];
+		for(int j=0;j<DEFAULT_LINE_DURATION;j++){
+			line.chrominance[0][j]=(line.chrominance[0][j]+prevLine.chrominance[0][j])/2.0f;
+			line.chrominance[1][j]=(line.chrominance[1][j]+prevLine.chrominance[1][j])/2.0f;
+		}
+	}
 }
