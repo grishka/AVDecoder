@@ -576,6 +576,7 @@ vector<VideoLine> Decoder::processField(VideoField *field, std::vector<SyncPulse
 		fieldQueue.pop_front();
 		float defaultWhiteLevel=field->blackLevel+std::min((field->blackLevel-field->syncLevel)/whiteLevelRatio, 0.99f-field->blackLevel);
 		float whiteLevel=fieldsWithoutVITS>5 ? defaultWhiteLevel : detectedWhiteLevel;
+		float spikeThreshold=whiteLevel+(whiteLevel-field->blackLevel)*0.25f;
 		fieldsWithoutVITS++;
 		// Try to sample white level from VITS signals transmitted by most channels
 		int vitsLineIndex=field->isBottom ? 17 : 16;
@@ -606,6 +607,24 @@ vector<VideoLine> Decoder::processField(VideoField *field, std::vector<SyncPulse
 			if(lineIndex<625){
 				VideoLine& line=field->lines[j];
 				int numSamples=line.numSamples;
+				
+				// Find and remove (interpolate over) spikes in the signal
+				int spikeStartIndex=-1;
+				for(int i=0;i<numSamples;i++){
+					if(line.raw[i]>spikeThreshold){
+						spikeStartIndex=i;
+					}else if(spikeStartIndex!=-1){
+						int interpStart=std::max(0, spikeStartIndex-5);
+						int interpEnd=std::min(numSamples, i+5);
+						for(int j=interpStart;j<interpEnd;j++){
+							float k=(j-interpStart)/(interpEnd-interpStart);
+							line.luminance[j]=line.luminance[interpStart]*(1.0f-k)+line.luminance[interpEnd]*k;
+							line.chrominance[0][j]=line.chrominance[0][interpStart]*(1.0f-k)+line.chrominance[0][interpEnd]*k;
+							line.chrominance[1][j]=line.chrominance[1][interpStart]*(1.0f-k)+line.chrominance[1][interpEnd]*k;
+						}
+						spikeStartIndex=-1;
+					}
+				}
 
 				float leadingOffset=0;
 				float trailingOffset=0;
