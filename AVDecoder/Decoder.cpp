@@ -207,7 +207,7 @@ void Decoder::runDecoderThread(){
 		nextSamples=samples;
 		samples=tmp;
 		
-		memcpy(b->raw, nextSamples, BUFFER_SIZE*sizeof(float));
+		memcpy(nextBuf->raw, nextSamples, BUFFER_SIZE*sizeof(float));
 		
 		for(int i=0;i<BUFFER_SIZE;i++){
 			int32_t sampleInt=(int32_t)buf[i];
