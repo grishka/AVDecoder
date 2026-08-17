@@ -568,6 +568,9 @@ vector<VideoLine> Decoder::processField(VideoField *field, std::vector<SyncPulse
 		}else if(allAreBottom){
 			fieldQueue[0]->isBottom=false;
 			fieldQueue[2]->isBottom=false;
+		}else if(fieldQueue[0]->isBottom==fieldQueue[1]->isBottom && fieldQueue[1]->isBottom==fieldQueue[2]->isBottom && fieldQueue[2]->isBottom!=fieldQueue[3]->isBottom){
+			// top/top/top/bottom (or inverse) -- the 2nd field was misdetected
+			fieldQueue[1]->isBottom=!fieldQueue[1]->isBottom;
 		}
 		VideoField *field=fieldQueue.front();
 		fieldQueue.pop_front();
