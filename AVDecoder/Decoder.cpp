@@ -576,7 +576,6 @@ vector<VideoLine> Decoder::processField(VideoField *field, std::vector<SyncPulse
 		fieldQueue.pop_front();
 		float defaultWhiteLevel=field->blackLevel+std::min((field->blackLevel-field->syncLevel)/whiteLevelRatio, 0.99f-field->blackLevel);
 		float whiteLevel=fieldsWithoutVITS>5 ? defaultWhiteLevel : detectedWhiteLevel;
-		float spikeThreshold=whiteLevel+(whiteLevel-field->blackLevel)*0.25f;
 		fieldsWithoutVITS++;
 		// Try to sample white level from VITS signals transmitted by most channels
 		int vitsLineIndex=field->isBottom ? 17 : 16;
@@ -595,7 +594,8 @@ vector<VideoLine> Decoder::processField(VideoField *field, std::vector<SyncPulse
 				fieldsWithoutVITS=0;
 			}
 		}
-		
+		float spikeThreshold=whiteLevel+(whiteLevel-field->blackLevel)*0.25f;
+
 		// Precisely align lines relative to each other by offsetting and interpolating them such that the edges of the sync pulses either end of the line
 		// end up at exact known X coordinates in the framebuffer
 		float leadingThreshold=field->syncLevel+(field->blackLevel-field->syncLevel)*0.2f;
@@ -614,13 +614,15 @@ vector<VideoLine> Decoder::processField(VideoField *field, std::vector<SyncPulse
 					if(line.raw[i]>spikeThreshold){
 						spikeStartIndex=i;
 					}else if(spikeStartIndex!=-1){
-						int interpStart=std::max(0, spikeStartIndex-5);
-						int interpEnd=std::min(numSamples, i+5);
-						for(int j=interpStart;j<interpEnd;j++){
-							float k=(j-interpStart)/(interpEnd-interpStart);
-							line.luminance[j]=line.luminance[interpStart]*(1.0f-k)+line.luminance[interpEnd]*k;
-							line.chrominance[0][j]=line.chrominance[0][interpStart]*(1.0f-k)+line.chrominance[0][interpEnd]*k;
-							line.chrominance[1][j]=line.chrominance[1][interpStart]*(1.0f-k)+line.chrominance[1][interpEnd]*k;
+						if(i-spikeStartIndex<10){
+							int interpStart=std::max(0, spikeStartIndex-5);
+							int interpEnd=std::min(numSamples, i+5);
+							for(int j=interpStart;j<interpEnd;j++){
+								float k=(j-interpStart)/(interpEnd-interpStart);
+								line.luminance[j]=line.luminance[interpStart]*(1.0f-k)+line.luminance[interpEnd]*k;
+								line.chrominance[0][j]=line.chrominance[0][interpStart]*(1.0f-k)+line.chrominance[0][interpEnd]*k;
+								line.chrominance[1][j]=line.chrominance[1][interpStart]*(1.0f-k)+line.chrominance[1][interpEnd]*k;
+							}
 						}
 						spikeStartIndex=-1;
 					}
