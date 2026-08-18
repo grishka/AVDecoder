@@ -594,7 +594,7 @@ vector<VideoLine> Decoder::processField(VideoField *field, std::vector<SyncPulse
 				fieldsWithoutVITS=0;
 			}
 		}
-		float spikeThreshold=whiteLevel+(whiteLevel-field->blackLevel)*0.25f;
+		float spikeThreshold=whiteLevel+(whiteLevel-field->blackLevel)*0.45f;
 
 		// Precisely align lines relative to each other by offsetting and interpolating them such that the edges of the sync pulses either end of the line
 		// end up at exact known X coordinates in the framebuffer
