@@ -1311,7 +1311,11 @@ void Decoder::ColorDecoderPAL::demodulateSubcarrier(SignalBuffers *buf){
 }
 
 void Decoder::ColorDecoderPAL::decodeColor(VideoField *field){
-	float prevLineBurstAngle=0;
+	float burstIs[313];
+	float burstQs[313];
+	float burstAmplitudes[313];
+	int linesWithBurst=0;
+	float avgBurstAmplitude=0;
 	for(int i=0;i<(field->isBottom ? 313 : 312);i++){
 		VideoLine &line=field->lines[i];
 		float burstI=0, burstQ=0;
@@ -1321,15 +1325,32 @@ void Decoder::ColorDecoderPAL::decodeColor(VideoField *field){
 		}
 		burstI/=41.0f;
 		burstQ/=41.0f;
-		float burstAngle=atan2f(burstQ, burstI);
 		float burstAmplitude=hypotf(burstI, burstQ);
+		if(burstAmplitude>=0.005f){
+			avgBurstAmplitude+=burstAmplitude;
+			linesWithBurst++;
+		}
+		burstIs[i]=burstI;
+		burstQs[i]=burstQ;
+		burstAmplitudes[i]=burstAmplitude;
+	}
+	if(linesWithBurst>0){
+		avgBurstAmplitude/=linesWithBurst;
+	}
+	
+	float prevLineBurstAngle=0;
+	float overallChrominanceScale=linesWithBurst>0 ? 1.0f/(avgBurstAmplitude*3.5f) : 1.0f;
+	for(int i=0;i<(field->isBottom ? 313 : 312);i++){
+		VideoLine &line=field->lines[i];
+		float burstI=burstIs[i], burstQ=burstQs[i];
+		float burstAngle=atan2f(burstQ, burstI);
+		float burstAmplitude=burstAmplitudes[i];
 		if(burstAmplitude<0.005f){
 			memset(line.chrominance[0], 0, DEFAULT_LINE_DURATION*sizeof(float));
 			memset(line.chrominance[1], 0, DEFAULT_LINE_DURATION*sizeof(float));
 			continue;
 		}
 		
-		float overallChrominanceScale=1.0f/(burstAmplitude*3.5f);
 		float targetAngle=M_PI*0.75f; // 135 degrees
 		float angleDiff=burstAngle-prevLineBurstAngle;
 		if(angleDiff>M_PI)
