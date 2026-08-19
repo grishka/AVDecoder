@@ -618,7 +618,7 @@ vector<VideoLine> Decoder::processField(VideoField *field, std::vector<SyncPulse
 							int interpStart=std::max(0, spikeStartIndex-5);
 							int interpEnd=std::min(numSamples, i+5);
 							for(int j=interpStart;j<interpEnd;j++){
-								float k=(j-interpStart)/(interpEnd-interpStart);
+								float k=(j-interpStart)/(float)(interpEnd-interpStart);
 								line.luminance[j]=line.luminance[interpStart]*(1.0f-k)+line.luminance[interpEnd]*k;
 								line.chrominance[0][j]=line.chrominance[0][interpStart]*(1.0f-k)+line.chrominance[0][interpEnd]*k;
 								line.chrominance[1][j]=line.chrominance[1][interpStart]*(1.0f-k)+line.chrominance[1][interpEnd]*k;
