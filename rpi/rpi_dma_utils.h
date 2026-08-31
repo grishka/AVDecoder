@@ -16,13 +16,20 @@
 //
 
 // Location of peripheral registers in physical memory
-#define PHYS_REG_BASE   PI_01_REG_BASE
 #define PI_01_REG_BASE  0x20000000  // Pi Zero or 1
 #define PI_23_REG_BASE  0x3F000000  // Pi 2 or 3
 #define PI_4_REG_BASE   0xFE000000  // Pi 4
 
-//#define CLOCK_HZ      250000000   // Pi 2 - 4
+#if defined(RPI_2) || defined(RPI_3)
+#define PHYS_REG_BASE   PI_23_REG_BASE
+#define CLOCK_HZ      250000000   // Pi 2 - 4
+#elif defined(RPI_4)
+#define PHYS_REG_BASE   PI_4_REG_BASE
+#define CLOCK_HZ      250000000   // Pi 2 - 4
+#else
+#define PHYS_REG_BASE   PI_01_REG_BASE
 #define CLOCK_HZ        400000000   // Pi Zero
+#endif
 
 // Location of peripheral registers in bus memory
 #define BUS_REG_BASE    0x7E000000
@@ -49,14 +56,14 @@ typedef struct {
 } MEM_MAP;
 
 // Get virtual 8 and 32-bit pointers to register
-#define REG8(m, x)  ((volatile uint8_t *) ((uint32_t)(m.virt)+(uint32_t)(x)))
-#define REG32(m, x) ((volatile uint32_t *)((uint32_t)(m.virt)+(uint32_t)(x)))
+#define REG8(m, x)  ((volatile uint8_t *) ((uintptr_t)(m.virt)+(uintptr_t)(x)))
+#define REG32(m, x) ((volatile uint32_t *)((uintptr_t)(m.virt)+(uintptr_t)(x)))
 // Get bus address of register
-#define REG_BUS_ADDR(m, x)  ((uint32_t)(m.bus)  + (uint32_t)(x))
+#define REG_BUS_ADDR(m, x)  ((uintptr_t)(m.bus)  + (uintptr_t)(x))
 // Convert uncached memory virtual address to bus address
-#define MEM_BUS_ADDR(mp, a) ((uint32_t)a-(uint32_t)mp->virt+(uint32_t)mp->bus)
+#define MEM_BUS_ADDR(mp, a) ((uintptr_t)a-(uintptr_t)mp->virt+(uintptr_t)mp->bus)
 // Convert bus address to physical address (for mmap)
-#define BUS_PHYS_ADDR(a)    ((void *)((uint32_t)(a)&~0xC0000000))
+#define BUS_PHYS_ADDR(a)    ((void *)((uintptr_t)(a)&~0xC0000000))
 
 // GPIO register definitions
 #define GPIO_BASE       (PHYS_REG_BASE + 0x200000)
@@ -181,13 +188,13 @@ uint8_t gpio_in(int pin);
 void disp_mode_vals(uint32_t mode);
 int open_mbox(void);
 void close_mbox(int fd);
-uint32_t msg_mbox(int fd, VC_MSG *msgp);
+uintptr_t msg_mbox(int fd, VC_MSG *msgp);
 void *map_segment(void *addr, int size);
 void unmap_segment(void *addr, int size);
-uint32_t alloc_vc_mem(int fd, uint32_t size, VC_ALLOC_FLAGS flags);
+uintptr_t alloc_vc_mem(int fd, uint32_t size, VC_ALLOC_FLAGS flags);
 void *lock_vc_mem(int fd, int h);
-uint32_t unlock_vc_mem(int fd, int h);
-uint32_t free_vc_mem(int fd, int h);
+uintptr_t unlock_vc_mem(int fd, int h);
+uintptr_t free_vc_mem(int fd, int h);
 uint32_t set_vc_clock(int fd, int id, uint32_t freq);
 void disp_vc_msg(VC_MSG *msgp);
 void enable_dma(int chan);

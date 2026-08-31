@@ -43,7 +43,7 @@ void *map_periph(MEM_MAP *mp, void *phys, int size)
 {
     mp->phys = phys;
     mp->size = PAGE_ROUNDUP(size);
-    mp->bus = (void *)((uint32_t)phys - PHYS_REG_BASE + BUS_REG_BASE);
+    mp->bus = (void *)((uintptr_t)phys - PHYS_REG_BASE + BUS_REG_BASE);
     mp->virt = map_segment(phys, mp->size);
     return(mp->virt);
 }
@@ -150,9 +150,9 @@ void close_mbox(int fd)
 }
 
 // Send message to mailbox, return first response int, 0 if error
-uint32_t msg_mbox(int fd, VC_MSG *msgp)
+uintptr_t msg_mbox(int fd, VC_MSG *msgp)
 {
-    uint32_t ret=0, i;
+    uintptr_t ret=0, i;
 
     for (i=msgp->dlen/4; i<=msgp->blen/4; i+=4)
         msgp->uints[i++] = 0;
@@ -173,7 +173,7 @@ uint32_t msg_mbox(int fd, VC_MSG *msgp)
 }
 
 // Allocate memory on PAGE_SIZE boundary, return handle
-uint32_t alloc_vc_mem(int fd, uint32_t size, VC_ALLOC_FLAGS flags)
+uintptr_t alloc_vc_mem(int fd, uint32_t size, VC_ALLOC_FLAGS flags)
 {
     VC_MSG msg={.tag=0x3000c, .blen=12, .dlen=12,
         .uints={PAGE_ROUNDUP(size), PAGE_SIZE, flags}};
@@ -186,13 +186,13 @@ void *lock_vc_mem(int fd, int h)
     return(h ? (void *)msg_mbox(fd, &msg) : 0);
 }
 // Unlock allocated memory
-uint32_t unlock_vc_mem(int fd, int h)
+uintptr_t unlock_vc_mem(int fd, int h)
 {
     VC_MSG msg={.tag=0x3000e, .blen=4, .dlen=4, .uints={h}};
     return(h ? msg_mbox(fd, &msg) : 0);
 }
 // Free memory
-uint32_t free_vc_mem(int fd, int h)
+uintptr_t free_vc_mem(int fd, int h)
 {
     VC_MSG msg={.tag=0x3000f, .blen=4, .dlen=4, .uints={h}};
     return(h ? msg_mbox(fd, &msg) : 0);
@@ -231,7 +231,7 @@ void *map_segment(void *addr, int size)
     size = PAGE_ROUNDUP(size);
     if ((fd = open ("/dev/mem", O_RDWR|O_SYNC|O_CLOEXEC)) < 0)
         fail("Error: can't open /dev/mem, run using sudo\n");
-    mem = mmap(0, size, PROT_WRITE|PROT_READ, MAP_SHARED, fd, (uint32_t)addr);
+    mem = mmap(0, size, PROT_WRITE|PROT_READ, MAP_SHARED, fd, (uintptr_t)addr);
     close(fd);
 #if DEBUG
     printf("Map %p -> %p\n", (void *)addr, mem);
