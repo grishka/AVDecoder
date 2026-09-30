@@ -1045,24 +1045,6 @@ void Decoder::ColorDecoderSECAM::decodeColor(VideoField *field){
 		}
 	}
 	
-	if(syncLineCount<2){ // There were no green lines or they were all too garbled
-		// So let's instead analyze some of the top active lines, since they *should* have some undeviated carrier in the front porch
-		int start=field->isBottom ? 27 : 26;
-		int end=field->isBottom ? 35 : 34;
-		for(int i=start;i<end;i++){
-			float avg=0;
-			for(int j=150;j<190;j++){
-				avg+=field->lines[i].chrominance[0][j];
-			}
-			avg/=40.0f;
-			int lineIndex=i+(field->isBottom ? 312 : 0);
-			bool isRedLine=(lineIndex+colorLineOffset)%2==0;
-			bool isActuallyRedLine=avg>intermediateFreq;
-			if(isRedLine!=isActuallyRedLine)
-				wrongLineCount++;
-		}
-	}
-	
 	if(wrongLineCount>=2){ // Our current state is wrong, flip it
 		colorLineOffset=colorLineOffset==1 ? 0 : 1;
 	}
@@ -1072,30 +1054,30 @@ void Decoder::ColorDecoderSECAM::decodeColor(VideoField *field){
 		
 		VideoLine &line=field->lines[i];
 		bool isRedLine=(lineIndex+colorLineOffset)%2==0;
-		if((lineIndex>=6 && lineIndex<15) || (lineIndex>=319 && lineIndex<328)){
-			float centerSum=0;
-			float min=10;
-			float max=-10;
-			for(int j=150;j<250;j++){
-				centerSum+=line.chrominance[0][j];
-				min=std::min(line.chrominance[0][j], min);
-				max=std::max(line.chrominance[0][j], max);
-			}
-			float centerFreq=centerSum/100.0;
-			float maxSum=0;
-			for(int j=1000;j<1200;j++){
-				maxSum+=line.chrominance[0][j];
-			}
-			float maxFreq=maxSum/200.0;
-			float freqDiff=centerFreq-maxFreq;
-			if(centerFreq>3500000 && centerFreq<4500000 && fabsf(freqDiff)>270000.0f){
-				bool isActuallyRedLine=maxFreq>centerFreq;
-				if(isActuallyRedLine!=isRedLine){
+		
+		// Analyze a bit of the undeviated subcarrier in the front porch to more confidently determine whether this is a red or blue line
+		float undeviatedAvg=0;
+		float undeviatedAmplitude=0;
+		for(int j=150;j<190;j++){
+			undeviatedAvg+=field->lines[i].chrominance[0][j];
+			undeviatedAmplitude+=field->lines[i].chrominance[1][j];
+		}
+		undeviatedAmplitude/=40.0f;
+		if(undeviatedAmplitude>subcarrierAmplitudeThreshold){
+			undeviatedAvg/=40.0f;
+			if(undeviatedAvg>redCenterFreq-50000){
+				if(!isRedLine){
+					isRedLine=true;
 					colorLineOffset=colorLineOffset==1 ? 0 : 1;
-					isRedLine=isActuallyRedLine;
+				}
+			}else if(undeviatedAvg<blueCenterFreq+50000){
+				if(isRedLine){
+					isRedLine=false;
+					colorLineOffset=colorLineOffset==1 ? 0 : 1;
 				}
 			}
 		}
+
 		float centerFreq=isRedLine ? redCenterFreq : blueCenterFreq;
 		float maxDeviation=isRedLine ? redMaxDeviation : blueMaxDeviation;
 		int chrominanceIndex=isRedLine ? 1 : 0;
@@ -1111,7 +1093,6 @@ void Decoder::ColorDecoderSECAM::decodeColor(VideoField *field){
 					remainingBadChromaSamples=50;
 				}else if(remainingBadChromaSamples>0){
 					remainingBadChromaSamples--;
-					//line.chrominance[chrominanceIndex][j]=prevFieldChrominance[chrominanceIndex][DEFAULT_LINE_DURATION*(lineIndex+(frameCount%2==1 ? 0 : 1))+j];
 					float fromPrevField=prevFieldChrominance[chrominanceIndex][DEFAULT_LINE_DURATION*(lineIndex+(frameCount%2==1 ? 0 : 1))+j];
 					float fromPrevLine=field->lines[i-1].chrominance[chrominanceIndex][j];
 					line.chrominance[chrominanceIndex][j]=(fromPrevField+fromPrevLine)/2.0f;
