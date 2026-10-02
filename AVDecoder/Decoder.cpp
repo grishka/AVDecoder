@@ -182,15 +182,19 @@ void Decoder::runDecoderThread(){
 	int lastLongSyncPulseLocation=0;
 	int earliestNextLongSyncPulseLocation=-1;
 	bool nextFieldIsBottom=false;
+	bool insidePulse=false;
+	int pulseStart=0;
 	
+	const int numSyncPulsesFromPrevBuffer=10;
+
 	while(running){
-		if(syncPulseLocations.size()>10){
-			syncPulseLocations.erase(syncPulseLocations.begin(), syncPulseLocations.end()-10);
+		if(syncPulseLocations.size()>numSyncPulsesFromPrevBuffer){
+			syncPulseLocations.erase(syncPulseLocations.begin(), syncPulseLocations.end()-numSyncPulsesFromPrevBuffer);
 			for(SyncPulse& sp:syncPulseLocations){
 				sp.location-=BUFFER_SIZE;
 			}
 		}else{
-			while(syncPulseLocations.size()<10)
+			while(syncPulseLocations.size()<numSyncPulsesFromPrevBuffer)
 				syncPulseLocations.push_back({-1, 0});
 		}
 		tgvoip::Buffer buf=newlyAcquiredDataBuffers.GetBlocking();
@@ -299,14 +303,9 @@ void Decoder::runDecoderThread(){
 			}
 		}
 		
-		bool insidePulse=false;
-		int pulseStart=0;
-		for(int i=0;i<BUFFER_SIZE+DEFAULT_LINE_DURATION;i++){
+		for(int i=0;i<BUFFER_SIZE;i++){
 			float s;
-			if(i<BUFFER_SIZE)
-				s=b->filteredLuminance[i];
-			else
-				s=nextBuf->filteredLuminance[i-BUFFER_SIZE];
+			s=b->filteredLuminance[i];
 			if(insidePulse){
 				if(s>syncThreshold){
 					insidePulse=false;
@@ -323,13 +322,13 @@ void Decoder::runDecoderThread(){
 			}
 		}
 		
-		for(int i=10;i<syncPulseLocations.size();i++){
+		for(int i=numSyncPulsesFromPrevBuffer;i<syncPulseLocations.size();i++){
 			int loc=syncPulseLocations[i].location;
 			if(loc>=BUFFER_SIZE)
 				break;
 			if(syncPulseLocations[i].length>LINE_SYNC_MAX_DURATION && loc>=earliestNextLongSyncPulseLocation){
 				int prevLineSyncPos=0;
-				for(int j=1;j<10;j++){
+				for(int j=1;j<numSyncPulsesFromPrevBuffer;j++){
 					int length=syncPulseLocations[i-j].length;
 					if(length>LINE_SYNC_MIN_DURATION && length<LINE_SYNC_MAX_DURATION){
 						prevLineSyncPos=syncPulseLocations[i-j].location;
@@ -361,7 +360,7 @@ void Decoder::runDecoderThread(){
 					currentField->appendSamples(b, offset, std::min(count, maxCount));
 				}
 				assert(currentField->numSamples==fieldDuration);
-				for(int j=10;j<i;j++){
+				for(int j=numSyncPulsesFromPrevBuffer;j<i;j++){
 					if(syncPulseLocations[j].location>=lastLongSyncPulseLocation)
 						currentFieldSyncPulses.push_back(syncPulseLocations[j].offset(-lastLongSyncPulseLocation));
 				}
@@ -392,6 +391,9 @@ void Decoder::runDecoderThread(){
 
 			currentField->appendSamples(b, offset, count);
 
+			VideoField *nextField=fieldPool.front();
+			fieldPool.pop_front();
+			assert(nextField->numSamples==0);
 			assert(currentField->numSamples==nextFieldDuration);
 			for(int j=10;j<syncPulseLocations.size();j++){
 				if(syncPulseLocations[j].location>=std::min(BUFFER_SIZE, lastLongSyncPulseLocation+nextFieldDuration))
@@ -401,6 +403,8 @@ void Decoder::runDecoderThread(){
 			}
 			vector<VideoLine> field=processField(currentField, currentFieldSyncPulses, syncLevel, blackLevel, visibleBrightnessRange, nextFieldIsBottom);
 			currentField->numSamples=0;
+			fieldPool.push_back(currentField);
+			currentField=nextField;
 			currentFieldSyncPulses.clear();
 
 			lastLongSyncPulseLocation+=nextFieldDuration;
@@ -427,6 +431,7 @@ void Decoder::runDecoderThread(){
 		
 		lastLongSyncPulseLocation-=BUFFER_SIZE;
 		earliestNextLongSyncPulseLocation-=BUFFER_SIZE;
+		pulseStart-=BUFFER_SIZE;
 		
 		//blockingSemaphore.Release();
 		bufferCount++;
