@@ -439,6 +439,8 @@ void runLoopCallback(void *info){
 	_openFileButton.enabled=true;
 	[NSProcessInfo.processInfo endActivity:activityToken];
 	activityToken=nil;
+	_window.representedURL=NULL;
+	_window.title=@"AVDecoder";
 }
 
 - (IBAction)onStartAdcClick:(id)sender{
@@ -455,6 +457,8 @@ void runLoopCallback(void *info){
 	[openPanel beginSheetModalForWindow:_window completionHandler:^(NSModalResponse returnCode) {
 		if(returnCode==NSModalResponseOK){
 			self->source=new FileSignalSource(std::string([openPanel.URL.path UTF8String]));
+			self->_window.representedURL=openPanel.URL;
+			self->_window.title=[NSString stringWithFormat:@"%@ — AVDecoder", openPanel.URL.path.lastPathComponent];
 			[self startSource];
 		}
 	}];
