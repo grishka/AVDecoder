@@ -606,6 +606,7 @@ vector<VideoLine> Decoder::processField(VideoField *field, std::vector<SyncPulse
 		float leadingThreshold=field->syncLevel+(field->blackLevel-field->syncLevel)*0.2f;
 		float trailingThreshold=field->syncLevel+(field->blackLevel-field->syncLevel)*0.6f;
 		float lineLeadingOffsets[field->lines.size()], lineTrailingOffsets[field->lines.size()], lineTrailingAlignPositions[field->lines.size()];
+		float lineAverageLeadingOffsets[field->lines.size()], lineAverageTrailingOffsets[field->lines.size()];
 		int lineLeadingAlignDestinations[field->lines.size()];
 		for(int j=0;j<field->lines.size();j++){
 			int lineIndex=j+(field->isBottom ? 312 : 0);
@@ -679,12 +680,46 @@ vector<VideoLine> Decoder::processField(VideoField *field, std::vector<SyncPulse
 			}
 		}
 		
+		const int lineOffsetAveragingWindow=3;
+		float avgLeadingOffset=0, avgTrailingOffset=0;
+		for(j=0;j<lineOffsetAveragingWindow;j++){
+			avgLeadingOffset+=lineLeadingOffsets[j];
+			avgTrailingOffset+=lineTrailingOffsets[j];
+		}
+		for(int j=lineOffsetAveragingWindow;j<field->lines.size()-lineOffsetAveragingWindow;j++){
+			lineAverageLeadingOffsets[j]=avgLeadingOffset/(float)(lineOffsetAveragingWindow*2+1);
+			lineAverageTrailingOffsets[j]=avgTrailingOffset/(float)(lineOffsetAveragingWindow*2+1);
+
+			avgLeadingOffset+=lineLeadingOffsets[j+lineOffsetAveragingWindow];
+			avgTrailingOffset+=lineTrailingOffsets[j+lineOffsetAveragingWindow];
+			avgLeadingOffset-=lineLeadingOffsets[j-lineOffsetAveragingWindow];
+			avgTrailingOffset-=lineTrailingOffsets[j-lineOffsetAveragingWindow];
+		}
+		for(int j=0;j<lineOffsetAveragingWindow;j++){
+			lineAverageLeadingOffsets[j]=lineAverageLeadingOffsets[lineOffsetAveragingWindow];
+			lineAverageTrailingOffsets[j]=lineAverageTrailingOffsets[lineOffsetAveragingWindow];
+			lineAverageLeadingOffsets[field->lines.size()-j-1]=lineAverageLeadingOffsets[field->lines.size()-lineOffsetAveragingWindow-1];
+			lineAverageTrailingOffsets[field->lines.size()-j-1]=lineAverageTrailingOffsets[field->lines.size()-lineOffsetAveragingWindow-1];
+		}
+		
+		//int fixedLeading=0, fixedTrailing=0;
 		for(int j=0;j<field->lines.size();j++){
 			int lineIndex=j+(field->isBottom ? 312 : 0);
 			if(lineIndex<625){
-				interpolateLine(field->lines[j], interpolatedField->lines[j], lineLeadingOffsets[j], lineTrailingOffsets[j], lineLeadingAlignDestinations[j], lineTrailingAlignPositions[j]);
+				float leadingOffset=lineLeadingOffsets[j];
+				float trailingOffset=lineTrailingOffsets[j];
+				if(fabsf(leadingOffset-lineAverageLeadingOffsets[j])>5){
+					leadingOffset=lineAverageLeadingOffsets[j];
+					//fixedLeading++;
+				}
+				if(fabsf(trailingOffset-lineAverageTrailingOffsets[j])>5){
+					trailingOffset=lineAverageTrailingOffsets[j];
+					//fixedTrailing++;
+				}
+				interpolateLine(field->lines[j], interpolatedField->lines[j], leadingOffset, trailingOffset, lineLeadingAlignDestinations[j], lineTrailingAlignPositions[j]);
 			}
 		}
+		//printf("leading %d, trailing %d\n", fixedLeading, fixedTrailing);
 		
 		interpolatedField->isBottom=field->isBottom;
 		interpolatedField->blackLevel=field->blackLevel;
